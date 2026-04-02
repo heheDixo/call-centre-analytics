@@ -363,9 +363,19 @@ if os.path.isdir(_static_dir):
 def frontend():
     if os.path.isfile(_index_html):
         return FileResponse(_index_html)
-    # Fallback: redirect to API docs if frontend not deployed
+    # Fallback: redirect to interactive API docs
     from fastapi.responses import RedirectResponse
     return RedirectResponse(url="/docs")
+
+
+@app.get(
+    "/api/call-analytics",
+    include_in_schema=False,
+)
+def call_analytics_info():
+    """Friendly response for browsers hitting the POST endpoint via GET."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/docs#/Analytics/Analyze_a_call_recording_api_call_analytics_post")
 
 
 @app.get("/health", tags=["Health"])
