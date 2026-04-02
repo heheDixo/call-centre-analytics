@@ -350,13 +350,22 @@ app.add_middleware(
 )
 
 # Serve the frontend UI
-_static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
+# abspath ensures correct resolution whether run from repo root or src/
+_static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "static"))
+_index_html = os.path.join(_static_dir, "index.html")
+
 if os.path.isdir(_static_dir):
     app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+    logger.info("Serving static files from %s", _static_dir)
 
-    @app.get("/", include_in_schema=False)
-    def frontend():
-        return FileResponse(os.path.join(_static_dir, "index.html"))
+
+@app.get("/", include_in_schema=False)
+def frontend():
+    if os.path.isfile(_index_html):
+        return FileResponse(_index_html)
+    # Fallback: redirect to API docs if frontend not deployed
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/docs")
 
 
 @app.get("/health", tags=["Health"])
