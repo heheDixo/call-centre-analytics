@@ -1,0 +1,37 @@
+services:
+  # ── Web API ────────────────────────────────────────────────────────────────
+  - type: web
+    name: call-analytics-api
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn src.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: CALL_ANALYTICS_API_KEY
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: PYTHON_VERSION
+        value: "3.11"
+
+  # ── Celery Worker ──────────────────────────────────────────────────────────
+  - type: worker
+    name: call-analytics-worker
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A src.main.celery_app worker --loglevel=info --concurrency=2
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: PYTHON_VERSION
+        value: "3.11"
