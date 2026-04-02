@@ -8,14 +8,14 @@ services:
     startCommand: uvicorn src.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: OPENAI_API_KEY
+      - key: GROQ_API_KEY
         sync: false
       - key: CALL_ANALYTICS_API_KEY
         sync: false
       - key: REDIS_URL
         sync: false
+      - key: CELERY_TASK_ALWAYS_EAGER
+        value: "true"
       - key: PYTHON_VERSION
         value: "3.11"
 
@@ -27,9 +27,7 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: celery -A src.main.celery_app worker --loglevel=info --concurrency=2
     envVars:
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: OPENAI_API_KEY
+      - key: GROQ_API_KEY
         sync: false
       - key: REDIS_URL
         sync: false

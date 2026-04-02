@@ -535,10 +535,6 @@
           <div class="field-label">API Key (x-api-key)</div>
           <input type="password" id="apiKey" placeholder="Enter your API key" autocomplete="off" />
         </div>
-        <div class="field">
-          <div class="field-label">API Base URL</div>
-          <input type="text" id="apiUrl" value="http://localhost:8000" />
-        </div>
 
         <div id="alertBox" class="alert"></div>
 
@@ -728,7 +724,7 @@
     const language = document.getElementById('language').value;
     const format   = document.getElementById('audioFormat').value;
     const apiKey   = document.getElementById('apiKey').value.trim();
-    const baseUrl  = document.getElementById('apiUrl').value.trim().replace(/\/$/, '');
+    const baseUrl  = window.location.origin;
 
     if (!file)   return showAlert('No audio file selected.');
     if (!apiKey) return showAlert('API key is required.');

@@ -16,6 +16,9 @@ import tempfile
 import logging
 from typing import Optional
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from groq import Groq
 from fastapi import FastAPI, HTTPException, Security, Depends
 from fastapi.security.api_key import APIKeyHeader
@@ -24,6 +27,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from celery import Celery
+import uuid
+import chromadb
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -51,6 +56,15 @@ celery_app.conf.update(
     task_always_eager=CELERY_EAGER,   # True = synchronous in-process (no Redis needed)
     task_eager_propagates=True,
 )
+
+# ── Vector Store (ChromaDB) ──────────────────────────────────────────────────
+_chroma_persist_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "chroma_data"))
+_chroma_client = chromadb.PersistentClient(path=_chroma_persist_dir)
+_collection = _chroma_client.get_or_create_collection(
+    name="transcripts",
+    metadata={"hnsw:space": "cosine"},
+)
+logger.info("ChromaDB initialized at %s", _chroma_persist_dir)
 
 # ── Language mapping (Whisper language codes) ─────────────────────────────────
 LANGUAGE_MAP: dict[str, str] = {
@@ -123,7 +137,7 @@ def compute_sop_scores(sop_booleans: dict) -> dict:
     return {
         **sop_booleans,
         "complianceScore": score,
-        "adherenceStatus": "FOLLOWED" if score >= 0.6 else "NOT_FOLLOWED",
+        "adherenceStatus": "FOLLOWED" if score == 1.0 else "NOT_FOLLOWED",
     }
 
 
@@ -214,22 +228,45 @@ ANALYZE_CALL_TOOL = {
     }
 }
 
-SYSTEM_PROMPT = """You are an expert call centre analytics system specializing in Indian language calls.
-You analyze transcripts in Hindi, Hinglish (Hindi mixed with English), Tamil, and Tanglish (Tamil mixed with English).
+SYSTEM_PROMPT = """You are an expert call centre compliance analyzer for Indian financial services and ed-tech sales calls.
+You analyze transcripts in Hindi, Hinglish (Hindi-English mix), Tamil, and Tanglish (Tamil-English mix).
 
-Standard SOP (Standard Operating Procedure) for a compliant call:
-1. Greeting       — agent warmly greets the customer
-2. Identification — agent introduces themselves and/or verifies the customer
-3. Problem Statement — the purpose or issue is clearly stated
-4. Solution Offering — agent proposes a solution or discusses options
-5. Closing        — call ends with confirmation, next steps, or polite farewell
+## SOP Steps — evaluate each step STRICTLY and independently:
+1. **Greeting** — Agent says hello/namaste/vanakkam or any warm opening phrase. Must be an EXPLICIT greeting at the start.
+2. **Identification** — Agent states their own name AND/OR company name, OR verifies the customer's identity (name/account number). Giving or asking for identity both count.
+3. **Problem Statement** — The reason/purpose for the call is clearly stated (e.g., outstanding payment, course inquiry, loan offer, policy discussion).
+4. **Solution Offering** — Agent proposes a specific actionable solution (EMI plan, payment schedule, course enrollment, discount, settlement). Merely discussing the problem is NOT a solution.
+5. **Closing** — Call ends with a clear farewell, thank you, confirmation of next steps, or goodbye. An abrupt end without any closing = false.
 
-Analyze carefully and return accurate results based only on what is in the transcript."""
+## Analytics Classification Rules:
+- **paymentPreference** — What payment method did the customer discuss, agree to, or show interest in?
+  - EMI = installments or monthly payments mentioned or discussed
+  - FULL_PAYMENT = paying the entire amount at once
+  - PARTIAL_PAYMENT = paying only a portion of the amount now
+  - DOWN_PAYMENT = initial deposit or advance payment before starting
+  - If NO payment discussion occurred at all, default to EMI.
+
+- **rejectionReason** — Why did the customer refuse, resist, or not complete the transaction?
+  - HIGH_INTEREST = complained about interest rates or fees being too high
+  - BUDGET_CONSTRAINTS = said they cannot afford it, financial difficulty, or lack of money
+  - ALREADY_PAID = claimed they have already made the payment
+  - NOT_INTERESTED = explicitly refused, showed no interest, or declined the offer
+  - NONE = customer did NOT reject; they were cooperative or agreed
+
+- **sentiment** — Overall customer emotional tone throughout the call:
+  - Positive = cooperative, agreeable, enthusiastic, thankful
+  - Negative = angry, frustrated, hostile, complaining, rude
+  - Neutral = matter-of-fact, neither clearly positive nor negative
+
+- **keywords** — Extract 5-10 domain-specific terms: product/course names, company names, monetary amounts, payment terms, technical skills, schemes, dates, and key topics. Do NOT include generic words like "call", "phone", "agent", "customer".
+
+Analyze ONLY what is explicitly present in the transcript. Do not infer or hallucinate information not present."""
 
 
 def build_user_message(transcript: str, language: str) -> str:
     return (
-        f"Analyze this {language} call centre transcript and extract structured analytics.\n\n"
+        f"Analyze this {language} call centre transcript. "
+        f"Evaluate each SOP step independently — mark true ONLY if clearly present in the transcript.\n\n"
         f"TRANSCRIPT:\n{transcript}\n\n"
         "Call the analyze_call function with your analysis."
     )
@@ -304,6 +341,20 @@ def process_call_analytics(self, language: str, audio_format: str, audio_base64:
 
         # ── 4. Compute SOP scores (deterministic) ────────────────────────
         sop_with_scores = compute_sop_scores(analysis["sop_validation"])
+
+        # ── 5. Store transcript in vector DB for semantic search ────────
+        doc_id = str(uuid.uuid4())
+        _collection.add(
+            documents=[transcript],
+            metadatas=[{
+                "language": language,
+                "sentiment": analysis["analytics"]["sentiment"],
+                "adherenceStatus": sop_with_scores["adherenceStatus"],
+                "summary": analysis["summary"],
+            }],
+            ids=[doc_id],
+        )
+        logger.info("Stored transcript in vector DB: id=%s", doc_id)
 
         return {
             "status":         "success",
@@ -431,3 +482,45 @@ def call_analytics(
         raise HTTPException(status_code=500, detail=f"Processing failed: {msg}") from exc
 
     return CallAnalyticsResponse(**result)
+
+
+# ── Semantic Search ──────────────────────────────────────────────────────────
+class SearchRequest(BaseModel):
+    query: str = Field(..., description="Natural language search query")
+    top_k: int = Field(default=5, ge=1, le=20, description="Number of results to return")
+
+
+class SearchResult(BaseModel):
+    transcript: str
+    metadata: dict
+    distance: float
+
+
+class SearchResponse(BaseModel):
+    results: list[SearchResult]
+
+
+@app.post(
+    "/api/search",
+    response_model=SearchResponse,
+    tags=["Search"],
+    summary="Semantic search across stored transcripts",
+)
+def search_transcripts(
+    request: SearchRequest,
+    _: str = Depends(verify_api_key),
+):
+    """Search previously analyzed transcripts using natural language queries."""
+    results = _collection.query(
+        query_texts=[request.query],
+        n_results=request.top_k,
+    )
+    items = []
+    if results["documents"] and results["documents"][0]:
+        for doc, meta, dist in zip(
+            results["documents"][0],
+            results["metadatas"][0],
+            results["distances"][0],
+        ):
+            items.append(SearchResult(transcript=doc, metadata=meta, distance=dist))
+    return SearchResponse(results=items)

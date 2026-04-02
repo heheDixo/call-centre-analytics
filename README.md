@@ -1,26 +1,22 @@
-# Call Centre Analytics API
+# Call Center Compliance API
 
-An intelligent call centre analytics system that processes voice recordings in Hindi (Hinglish) and Tamil (Tanglish), extracts transcripts using OpenAI Whisper, and performs AI-powered analysis using Claude claude-sonnet-4-6.
+## Description
 
-## Approach & Strategy
-
-1. **Speech-to-Text** — OpenAI Whisper (`whisper-1`) transcribes the audio. Language codes `hi` (Hindi/Hinglish) and `ta` (Tamil/Tanglish) are passed explicitly for best accuracy.
-2. **Structured AI Analysis** — A single Claude `claude-sonnet-4-6` API call using tool use (function calling) extracts: summary, SOP compliance booleans, payment preference, rejection reason, sentiment, and keywords. Tool use enforces exact enum values and boolean types — no fragile JSON parsing.
-3. **SOP Scoring** — Compliance score and adherence status are computed deterministically in Python (not by the AI), ensuring consistency.
-4. **Async Processing** — Celery with Redis handles audio processing asynchronously. The API endpoint dispatches the task and waits for the result, returning a synchronous response.
+An AI-powered API that processes call centre audio recordings in Hindi (Hinglish) and Tamil (Tanglish). It performs multi-stage analysis — transcription, SOP compliance validation, payment/sentiment classification, and keyword extraction — returning structured JSON with compliance scores and business intelligence. Transcripts are indexed in a vector store for semantic search.
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Backend framework | FastAPI (Python 3.11) |
-| Async task queue | Celery 5.4 + Redis |
-| Speech-to-Text | OpenAI Whisper (`whisper-1`) |
-| NLP / AI | Anthropic Claude `claude-sonnet-4-6` |
-| Auth | API key via `x-api-key` header |
+| Backend Framework | FastAPI (Python 3.11) |
+| Speech-to-Text | Groq Whisper (`whisper-large-v3`) |
+| LLM / NLP Analysis | Groq LLaMA 3.3 70B (structured output via tool calling) |
+| Vector Storage | ChromaDB (persistent, cosine similarity) |
+| Task Queue | Celery 5.4 (eager mode or Redis worker) |
+| Authentication | API key via `x-api-key` header |
 | Deployment | Render.com (web + worker) + Redis Cloud |
 
-## Setup
+## Setup Instructions
 
 ### 1. Clone the repository
 
@@ -39,56 +35,41 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.example .env
-# Edit .env and fill in your API keys
+# Edit .env and fill in your keys
 ```
-
-Required variables:
 
 | Variable | Description |
 |----------|-------------|
-| `ANTHROPIC_API_KEY` | Anthropic API key (for Claude) |
-| `OPENAI_API_KEY` | OpenAI API key (for Whisper STT) |
-| `CALL_ANALYTICS_API_KEY` | Secret key clients must send in `x-api-key` header |
-| `REDIS_URL` | Redis connection string (broker + result backend) |
+| `GROQ_API_KEY` | Groq API key (free at console.groq.com) |
+| `CALL_ANALYTICS_API_KEY` | Secret key clients send in `x-api-key` header |
+| `CELERY_TASK_ALWAYS_EAGER` | `true` = run tasks in-process (no Redis needed) |
+| `REDIS_URL` | Redis connection string (only needed if eager=false) |
 
-### 4. Start Redis (local development)
+### 4. Run the application
 
-```bash
-docker run -d -p 6379:6379 redis:7
-```
-
-Or set `CELERY_TASK_ALWAYS_EAGER=true` in `.env` to skip Redis entirely (runs Celery tasks in-process, good for quick testing).
-
-### 5. Run the application
-
-**Terminal 1 — FastAPI web server:**
 ```bash
 uvicorn src.main:app --reload --port 8000
 ```
 
-**Terminal 2 — Celery worker:**
-```bash
-celery -A src.main.celery_app worker --loglevel=info
-```
+The API docs are available at `http://localhost:8000/docs` and the web UI at `http://localhost:8000/`.
 
-The API docs are available at [http://localhost:8000/docs](http://localhost:8000/docs).
+## Approach
+
+1. **Audio Decoding** — Base64-encoded MP3 is decoded and written to a temp file.
+2. **Speech-to-Text** — Groq Whisper (`whisper-large-v3`) transcribes the audio with explicit language codes (`hi` for Hindi/Hinglish, `ta` for Tamil/Tanglish) for best accuracy.
+3. **Structured AI Analysis** — A single Groq LLaMA 3.3 70B API call using tool calling (function calling) extracts: summary, SOP compliance booleans, payment preference, rejection reason, sentiment, and keywords. Tool use enforces exact enum values and boolean types — no fragile JSON parsing.
+4. **SOP Scoring** — Compliance score and adherence status are computed deterministically in Python (not by the LLM), ensuring consistency. All 5 SOP steps must be present for "FOLLOWED" status.
+5. **Vector Indexing** — Each processed transcript is stored in ChromaDB with metadata (language, sentiment, adherence status, summary) for semantic search via the `/api/search` endpoint.
+6. **Async Processing** — Celery handles task execution. In eager mode, tasks run in-process (no Redis needed). In production, a separate Celery worker processes tasks via Redis.
 
 ## API Usage
 
-### Endpoint
+### Analyze a Call
 
 ```
 POST /api/call-analytics
+Header: x-api-key: your-secret-key
 ```
-
-### Headers
-
-```
-x-api-key: your-secret-key
-Content-Type: application/json
-```
-
-### Request Body
 
 ```json
 {
@@ -98,71 +79,16 @@ Content-Type: application/json
 }
 ```
 
-**Supported languages:** `Hindi`, `Hinglish`, `Tamil`, `Tanglish`
+### Semantic Search
 
-**Supported formats:** `mp3`, `wav`, `m4a`, `webm`, `ogg`, `flac`
-
-### Example (curl)
-
-```bash
-# Encode audio file
-BASE64=$(base64 -i call.mp3 | tr -d '\n')
-
-# Call the API
-curl -X POST https://your-domain.com/api/call-analytics \
-  -H "x-api-key: your-secret-key" \
-  -H "Content-Type: application/json" \
-  -d "{\"language\":\"Tamil\",\"audioFormat\":\"mp3\",\"audioBase64\":\"$BASE64\"}"
 ```
-
-### Response
+POST /api/search
+Header: x-api-key: your-secret-key
+```
 
 ```json
 {
-  "status": "success",
-  "language": "Tamil",
-  "transcript": "வணக்கம், நான் Guvi இல் இருந்து பேசுகிறேன்...",
-  "summary": "Agent called customer to discuss a Data Science course. Customer showed interest in EMI options.",
-  "sop_validation": {
-    "greeting": true,
-    "identification": true,
-    "problemStatement": true,
-    "solutionOffering": true,
-    "closing": false,
-    "complianceScore": 0.8,
-    "adherenceStatus": "FOLLOWED",
-    "explanation": "Agent followed most SOP steps but did not formally close the call."
-  },
-  "analytics": {
-    "paymentPreference": "EMI",
-    "rejectionReason": "NONE",
-    "sentiment": "Positive"
-  },
-  "keywords": ["Data Science", "EMI", "course", "Guvi", "enrollment", "payment"]
+  "query": "EMI payment discussion",
+  "top_k": 5
 }
 ```
-
-## Deployment
-
-### Render.com
-
-1. Push this repository to GitHub.
-2. Create a free account at [render.com](https://render.com).
-3. Create **Web Service** from your GitHub repo:
-   - Build command: `pip install -r requirements.txt`
-   - Start command: `uvicorn src.main:app --host 0.0.0.0 --port $PORT`
-4. Create **Background Worker** from the same repo:
-   - Start command: `celery -A src.main.celery_app worker --loglevel=info --concurrency=2`
-5. Set environment variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CALL_ANALYTICS_API_KEY`, `REDIS_URL`) on both services.
-6. Use [Redis Cloud free tier](https://redis.com/try-free/) for `REDIS_URL`.
-
-The `render.yaml` file in this repo configures both services automatically.
-
-## Error Codes
-
-| Status | Meaning |
-|--------|---------|
-| 401 | Missing or invalid `x-api-key` |
-| 422 | Invalid request (bad language, format, or base64) |
-| 500 | Internal processing error |
-| 502 | Upstream API error (Whisper or Claude) |
