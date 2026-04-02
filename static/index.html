@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SIGNAL — Call Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@300;400;500&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #05070f;
+      --surface:   #090c18;
+      --surface2:  #0e1222;
+      --border:    #181e35;
+      --border2:   #222a45;
+      --amber:     #e8a000;
+      --amber-lo:  rgba(232,160,0,.08);
+      --amber-mid: rgba(232,160,0,.18);
+      --teal:      #00c9a7;
+      --teal-lo:   rgba(0,201,167,.08);
+      --red:       #ff3b5c;
+      --red-lo:    rgba(255,59,92,.08);
+      --text:      #c4cfe0;
+      --muted:     #3e4e6e;
+      --muted2:    #5a6a8a;
+      --mono:      'IBM Plex Mono', monospace;
+      --display:   'Bebas Neue', sans-serif;
+      --body:      'Barlow', sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--body);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* dot-grid background */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      background-image: radial-gradient(circle, rgba(232,160,0,.035) 1px, transparent 1px);
+      background-size: 26px 26px;
+      pointer-events: none;
+    }
+
+    /* scanline shimmer — one-shot on load */
+    body::after {
+      content: '';
+      position: fixed; inset: 0; z-index: 1;
+      background: linear-gradient(to bottom, transparent 50%, rgba(232,160,0,.012) 50%);
+      background-size: 100% 4px;
+      pointer-events: none;
+      opacity: .6;
+    }
+
+    .page-wrap { position: relative; z-index: 2; max-width: 1080px; margin: 0 auto; padding: 0 20px 80px; }
+
+    /* ─── HEADER ──────────────────────────────── */
+    header {
+      padding: 52px 0 44px;
+      display: flex; align-items: flex-end; justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 40px;
+      gap: 20px; flex-wrap: wrap;
+    }
+    .brand { display: flex; flex-direction: column; gap: 4px; }
+    .brand-eyebrow {
+      font-family: var(--mono);
+      font-size: .7rem; letter-spacing: .22em;
+      color: var(--amber); text-transform: uppercase;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .brand-eyebrow::before {
+      content: '';
+      display: block; width: 22px; height: 1px; background: var(--amber);
+    }
+    .brand h1 {
+      font-family: var(--display);
+      font-size: clamp(3rem, 6vw, 5rem);
+      letter-spacing: .04em; line-height: 1;
+      color: #fff;
+    }
+    .brand h1 span { color: var(--amber); }
+    .brand-sub {
+      font-family: var(--mono);
+      font-size: .72rem; color: var(--muted2);
+      letter-spacing: .12em; text-transform: uppercase;
+      margin-top: 2px;
+    }
+    .header-status {
+      display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+    }
+    .status-dot {
+      display: flex; align-items: center; gap: 8px;
+      font-family: var(--mono); font-size: .7rem;
+      color: var(--teal); letter-spacing: .1em;
+    }
+    .status-dot::before {
+      content: '';
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--teal);
+      box-shadow: 0 0 8px var(--teal);
+      animation: blink 2.4s ease-in-out infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .header-stat { font-family: var(--mono); font-size: .65rem; color: var(--muted); }
+
+    /* ─── UPLOAD SECTION ───────────────────────── */
+    .upload-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 2px;
+      border: 1px solid var(--border); border-radius: 2px;
+      overflow: hidden; margin-bottom: 40px;
+    }
+    @media(max-width:680px){ .upload-grid{ grid-template-columns:1fr; } }
+
+    .upload-panel {
+      background: var(--surface);
+      padding: 32px;
+    }
+    .upload-panel + .upload-panel {
+      border-left: 1px solid var(--border);
+    }
+    @media(max-width:680px){
+      .upload-panel + .upload-panel { border-left: none; border-top: 1px solid var(--border); }
+    }
+
+    .panel-label {
+      font-family: var(--mono); font-size: .65rem;
+      color: var(--amber); letter-spacing: .18em; text-transform: uppercase;
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 24px;
+    }
+    .panel-label::after {
+      content: ''; flex: 1; height: 1px; background: var(--border2);
+    }
+
+    /* Drop zone */
+    .drop-zone {
+      position: relative; cursor: pointer;
+      border: 1px solid var(--border2);
+      padding: 28px 20px 24px;
+      text-align: center;
+      transition: border-color .25s, background .25s;
+      min-height: 180px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: var(--amber);
+      background: var(--amber-lo);
+    }
+    .drop-zone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+
+    /* animated waveform */
+    .waveform { display: flex; align-items: center; gap: 3px; height: 44px; }
+    .wv-bar {
+      width: 3px; border-radius: 2px; background: var(--amber);
+      animation: wv 1.3s ease-in-out infinite;
+    }
+    @keyframes wv {
+      0%,100%{ transform: scaleY(.15); opacity:.25; }
+      50%    { transform: scaleY(1);   opacity:.85; }
+    }
+
+    .drop-main {
+      font-family: var(--display);
+      font-size: 1.5rem; letter-spacing: .08em; color: #fff;
+    }
+    .drop-sub {
+      font-family: var(--mono); font-size: .68rem;
+      color: var(--muted2); letter-spacing: .1em;
+    }
+    .drop-file-name {
+      font-family: var(--mono); font-size: .78rem;
+      color: var(--teal); letter-spacing: .06em;
+      display: none;
+    }
+
+    /* Form controls */
+    .ctrl-stack { display: flex; flex-direction: column; gap: 18px; }
+    .ctrl-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media(max-width:380px){ .ctrl-row{ grid-template-columns:1fr; } }
+
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field-label {
+      font-family: var(--mono); font-size: .62rem;
+      color: var(--muted2); letter-spacing: .15em; text-transform: uppercase;
+    }
+
+    input, select {
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      color: var(--text);
+      font-family: var(--mono); font-size: .82rem;
+      padding: 10px 14px;
+      outline: none;
+      border-radius: 1px;
+      transition: border-color .2s;
+      width: 100%;
+      -webkit-appearance: none;
+    }
+    input:focus, select:focus { border-color: var(--amber); }
+    select { cursor: pointer; }
+    input[type="password"] { letter-spacing: .15em; }
+
+    /* Submit button */
+    .submit-btn {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; padding: 14px 24px;
+      background: var(--amber); color: #060810;
+      border: none; cursor: pointer;
+      font-family: var(--display); font-size: 1.3rem; letter-spacing: .12em;
+      transition: background .2s, transform .1s;
+      border-radius: 1px;
+    }
+    .submit-btn:hover:not(:disabled) { background: #ffb820; }
+    .submit-btn:active:not(:disabled){ transform: scale(.99); }
+    .submit-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+    /* wave spinner inside button */
+    .btn-wave { display: none; align-items: center; gap: 2px; height: 18px; }
+    .btn-wv { width: 3px; border-radius: 2px; background: #060810; animation: wv .8s ease-in-out infinite; }
+
+    /* ─── ALERT ─────────────────────────────────── */
+    .alert {
+      padding: 12px 16px; font-family: var(--mono); font-size: .78rem;
+      letter-spacing: .04em; display: none;
+      border-left: 3px solid; margin-bottom: 24px;
+    }
+    .alert.error { background: var(--red-lo);  border-color: var(--red);  color: #ff8fa0; }
+    .alert.info  { background: var(--amber-lo); border-color: var(--amber); color: #e8c060; }
+
+    /* ─── PROCESSING BANNER ─────────────────────── */
+    #processingBanner {
+      display: none;
+      align-items: center; gap: 14px;
+      padding: 14px 20px; margin-bottom: 24px;
+      background: var(--amber-lo); border: 1px solid var(--amber-mid);
+    }
+    .proc-bars { display: flex; align-items: center; gap: 2px; height: 20px; }
+    .proc-bar { width: 3px; border-radius: 2px; background: var(--amber); animation: wv .5s ease-in-out infinite; }
+    #processingBanner span {
+      font-family: var(--mono); font-size: .72rem;
+      color: var(--amber); letter-spacing: .14em; text-transform: uppercase;
+    }
+
+    /* ─── RESULTS ────────────────────────────────── */
+    #results { display: none; }
+
+    .results-reveal { animation: revealUp .5s ease both; }
+    @keyframes revealUp {
+      from { opacity:0; transform:translateY(20px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+
+    /* section label */
+    .sec-label {
+      font-family: var(--mono); font-size: .62rem;
+      color: var(--amber); letter-spacing: .2em; text-transform: uppercase;
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 16px;
+    }
+    .sec-label::after { content:''; flex:1; height:1px; background: var(--border2); }
+
+    /* ─── TOP ROW: Gauge + SOP ─────────────────── */
+    .top-row {
+      display: grid; grid-template-columns: 240px 1fr; gap: 2px;
+      border: 1px solid var(--border); margin-bottom: 2px;
+    }
+    @media(max-width:700px){ .top-row{ grid-template-columns:1fr; } }
+
+    .gauge-panel {
+      background: var(--surface); padding: 28px 24px;
+      display: flex; flex-direction: column; align-items: center; gap: 16px;
+      border-right: 1px solid var(--border);
+    }
+    @media(max-width:700px){ .gauge-panel{ border-right:none; border-bottom:1px solid var(--border); } }
+
+    /* SVG circular gauge */
+    .gauge-wrap { position: relative; width: 160px; height: 160px; }
+    .gauge-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .gauge-bg-circle {
+      fill: none; stroke: var(--border2); stroke-width: 8;
+    }
+    .gauge-arc {
+      fill: none; stroke-width: 8; stroke-linecap: round;
+      stroke-dasharray: 408.41; /* 2π×65 */
+      stroke-dashoffset: 408.41;
+      transition: stroke-dashoffset 1.2s cubic-bezier(.22,1,.36,1);
+    }
+    .gauge-center {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+    .gauge-pct {
+      font-family: var(--display); font-size: 2.8rem;
+      line-height: 1; letter-spacing: .04em; color: #fff;
+    }
+    .gauge-sub {
+      font-family: var(--mono); font-size: .58rem;
+      color: var(--muted2); letter-spacing: .12em; text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    .adherence-pill {
+      font-family: var(--mono); font-size: .68rem; letter-spacing: .12em;
+      text-transform: uppercase;
+      padding: 5px 14px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .adherence-pill::before { content:''; width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+    .adherence-pill.followed   { color: var(--teal); border:1px solid rgba(0,201,167,.3); background: var(--teal-lo); }
+    .adherence-pill.followed::before { background: var(--teal); box-shadow:0 0 6px var(--teal); }
+    .adherence-pill.not-followed { color: var(--red); border:1px solid rgba(255,59,92,.3); background: var(--red-lo); }
+    .adherence-pill.not-followed::before { background: var(--red); box-shadow:0 0 6px var(--red); }
+
+    .gauge-lang {
+      font-family: var(--mono); font-size: .64rem;
+      color: var(--muted2); letter-spacing: .1em; text-transform: uppercase;
+    }
+
+    /* SOP Pipeline */
+    .sop-panel { background: var(--surface); padding: 28px 28px 24px; }
+
+    .sop-pipeline {
+      display: flex; align-items: flex-start;
+      gap: 0; margin: 8px 0 20px;
+      overflow-x: auto; padding-bottom: 4px;
+    }
+    .sop-step { display: flex; flex-direction: column; align-items: center; gap: 8px; flex: 1; min-width: 88px; }
+    .sop-step-top { display: flex; align-items: center; width: 100%; }
+    .sop-node {
+      width: 32px; height: 32px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--display); font-size: 1rem; letter-spacing: .04em;
+      flex-shrink: 0; position: relative; z-index: 1;
+      transition: box-shadow .3s;
+    }
+    .sop-node.pass {
+      background: rgba(0,201,167,.15); color: var(--teal);
+      border: 1.5px solid rgba(0,201,167,.4);
+      box-shadow: 0 0 14px rgba(0,201,167,.2);
+    }
+    .sop-node.fail {
+      background: rgba(255,59,92,.1); color: var(--red);
+      border: 1.5px solid rgba(255,59,92,.3);
+    }
+    .sop-connector {
+      flex: 1; height: 1.5px; margin-top: 0;
+      background: var(--border2);
+    }
+    .sop-connector.pass { background: rgba(0,201,167,.35); }
+    .sop-step-label {
+      font-family: var(--mono); font-size: .6rem;
+      color: var(--muted2); letter-spacing: .08em; text-transform: uppercase;
+      text-align: center; line-height: 1.3;
+    }
+    .sop-step-label.pass { color: var(--teal); }
+
+    .sop-explanation {
+      font-family: var(--mono); font-size: .72rem;
+      color: var(--muted2); line-height: 1.6;
+      padding: 12px 14px;
+      border-left: 2px solid var(--border2);
+      background: var(--surface2);
+    }
+
+    /* ─── ANALYTICS ROW ─────────────────────────── */
+    .analytics-row {
+      display: grid; grid-template-columns: repeat(3,1fr); gap: 2px;
+      border: 1px solid var(--border); border-top: none; margin-bottom: 2px;
+    }
+    @media(max-width:580px){ .analytics-row{ grid-template-columns:1fr; } }
+
+    .stat-card {
+      background: var(--surface); padding: 24px 22px;
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .stat-card:last-child { border-right: none; }
+    @media(max-width:580px){ .stat-card{ border-right:none; border-bottom:1px solid var(--border); } }
+
+    .stat-label {
+      font-family: var(--mono); font-size: .6rem;
+      color: var(--muted); letter-spacing: .18em; text-transform: uppercase;
+    }
+    .stat-value {
+      font-family: var(--display); font-size: 1.6rem;
+      letter-spacing: .06em; line-height: 1;
+      color: #fff;
+    }
+    .stat-value.positive { color: var(--teal); }
+    .stat-value.negative { color: var(--red); }
+    .stat-value.neutral  { color: var(--amber); }
+    .stat-detail {
+      font-family: var(--mono); font-size: .65rem;
+      color: var(--muted2); letter-spacing: .06em;
+    }
+
+    /* ─── KEYWORDS ──────────────────────────────── */
+    .keywords-panel {
+      background: var(--surface);
+      border: 1px solid var(--border); border-top: none;
+      padding: 24px 24px 20px; margin-bottom: 2px;
+    }
+    .kw-cloud { display: flex; flex-wrap: wrap; gap: 8px; }
+    .kw-tag {
+      font-family: var(--mono); font-size: .72rem; letter-spacing: .06em;
+      padding: 5px 13px;
+      border: 1px solid var(--border2); color: var(--muted2);
+      transition: border-color .2s, color .2s;
+      cursor: default;
+    }
+    .kw-tag:hover { border-color: var(--amber); color: var(--amber); }
+
+    /* ─── TRANSCRIPT SECTION ─────────────────────── */
+    .transcript-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 2px;
+      border: 1px solid var(--border); border-top: none; margin-bottom: 2px;
+    }
+    @media(max-width:680px){ .transcript-grid{ grid-template-columns:1fr; } }
+
+    .text-panel {
+      background: var(--surface); padding: 24px;
+      border-right: 1px solid var(--border);
+    }
+    .text-panel:last-child { border-right: none; }
+    @media(max-width:680px){ .text-panel{ border-right:none; border-bottom:1px solid var(--border); } }
+
+    .text-body {
+      font-family: var(--mono); font-size: .75rem;
+      line-height: 1.75; color: var(--text);
+      white-space: pre-wrap; word-break: break-word;
+      max-height: 240px; overflow-y: auto;
+      padding-right: 6px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border2) transparent;
+    }
+
+    /* ─── JSON PANEL ─────────────────────────────── */
+    .json-bar {
+      background: var(--surface);
+      border: 1px solid var(--border); border-top: none;
+      padding: 0;
+    }
+    .json-toggle-btn {
+      display: flex; align-items: center; gap: 8px;
+      width: 100%; padding: 12px 20px;
+      background: none; border: none; cursor: pointer;
+      font-family: var(--mono); font-size: .65rem;
+      color: var(--muted2); letter-spacing: .14em; text-transform: uppercase;
+      border-bottom: 1px solid transparent;
+      transition: color .2s;
+    }
+    .json-toggle-btn:hover { color: var(--amber); }
+    .json-toggle-btn .arrow { transition: transform .2s; }
+    .json-toggle-btn.open .arrow { transform: rotate(90deg); }
+    .json-pre {
+      display: none;
+      background: #030407;
+      padding: 20px;
+      font-family: var(--mono); font-size: .72rem;
+      color: #7dd3fc; white-space: pre; overflow-x: auto;
+      border-top: 1px solid var(--border);
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <!-- ── HEADER ────────────────────────────────────── -->
+  <header>
+    <div class="brand">
+      <div class="brand-eyebrow">Call Intelligence Platform</div>
+      <h1>SIGNAL<span>.</span></h1>
+      <div class="brand-sub">SOP Compliance &amp; Call Analytics Engine</div>
+    </div>
+    <div class="header-status">
+      <div class="status-dot">SYSTEM ONLINE</div>
+      <div class="header-stat">WHISPER-LARGE-V3 / LLAMA-3.3-70B</div>
+      <div class="header-stat">HINDI · HINGLISH · TAMIL · TANGLISH</div>
+    </div>
+  </header>
+
+  <!-- ── UPLOAD SECTION ─────────────────────────────── -->
+  <div class="upload-grid">
+
+    <!-- Drop zone -->
+    <div class="upload-panel">
+      <div class="panel-label">01 — Audio Input</div>
+      <div class="drop-zone" id="dropzone">
+        <input type="file" id="audioFile" accept=".mp3,.wav,.m4a,.ogg,.flac,.webm" />
+        <div class="waveform" id="waveform"></div>
+        <div class="drop-main" id="dropMain">DROP AUDIO FILE</div>
+        <div class="drop-sub" id="dropSub">or click to browse · mp3 / wav / m4a</div>
+        <div class="drop-file-name" id="dropFileName"></div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="upload-panel">
+      <div class="panel-label">02 — Configuration</div>
+      <div class="ctrl-stack">
+        <div class="ctrl-row">
+          <div class="field">
+            <div class="field-label">Language</div>
+            <select id="language">
+              <option value="Hindi">Hindi</option>
+              <option value="Hinglish">Hinglish</option>
+              <option value="Tamil">Tamil</option>
+              <option value="Tanglish">Tanglish</option>
+            </select>
+          </div>
+          <div class="field">
+            <div class="field-label">Format</div>
+            <select id="audioFormat">
+              <option value="mp3">MP3</option>
+              <option value="wav">WAV</option>
+              <option value="m4a">M4A</option>
+              <option value="ogg">OGG</option>
+              <option value="flac">FLAC</option>
+              <option value="webm">WEBM</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <div class="field-label">API Key (x-api-key)</div>
+          <input type="password" id="apiKey" placeholder="Enter your API key" autocomplete="off" />
+        </div>
+        <div class="field">
+          <div class="field-label">API Base URL</div>
+          <input type="text" id="apiUrl" value="http://localhost:8000" />
+        </div>
+
+        <div id="alertBox" class="alert"></div>
+
+        <button class="submit-btn" id="submitBtn" onclick="submitForm()">
+          <div class="btn-wave" id="btnWave">
+            <div class="btn-wv" style="--d:.0s"></div>
+            <div class="btn-wv" style="--d:.1s"></div>
+            <div class="btn-wv" style="--d:.2s"></div>
+            <div class="btn-wv" style="--d:.3s"></div>
+            <div class="btn-wv" style="--d:.4s"></div>
+          </div>
+          <span id="btnText">ANALYZE CALL</span>
+        </button>
+      </div>
+    </div>
+
+  </div><!-- /upload-grid -->
+
+  <!-- ── PROCESSING BANNER ──────────────────────────── -->
+  <div id="processingBanner">
+    <div class="proc-bars">
+      <div class="proc-bar" style="animation-delay:.0s"></div>
+      <div class="proc-bar" style="animation-delay:.1s"></div>
+      <div class="proc-bar" style="animation-delay:.2s"></div>
+      <div class="proc-bar" style="animation-delay:.3s"></div>
+      <div class="proc-bar" style="animation-delay:.4s"></div>
+    </div>
+    <span id="processingMsg">TRANSCRIBING AUDIO SIGNAL...</span>
+  </div>
+
+  <!-- ── RESULTS ────────────────────────────────────── -->
+  <div id="results">
+
+    <!-- top row: gauge + sop -->
+    <div class="top-row results-reveal" style="animation-delay:.0s">
+
+      <!-- Compliance Gauge -->
+      <div class="gauge-panel">
+        <div class="sec-label">Compliance</div>
+        <div class="gauge-wrap">
+          <svg viewBox="0 0 150 150">
+            <circle class="gauge-bg-circle" cx="75" cy="75" r="65" />
+            <circle class="gauge-arc" id="gaugeArc" cx="75" cy="75" r="65" />
+          </svg>
+          <div class="gauge-center">
+            <div class="gauge-pct" id="gaugePct">0%</div>
+            <div class="gauge-sub">SCORE</div>
+          </div>
+        </div>
+        <div class="adherence-pill" id="adherencePill"></div>
+        <div class="gauge-lang" id="gaugeLang"></div>
+      </div>
+
+      <!-- SOP Pipeline -->
+      <div class="sop-panel">
+        <div class="sec-label">SOP Pipeline</div>
+        <div class="sop-pipeline" id="sopPipeline"></div>
+        <div class="sop-explanation" id="sopExplanation"></div>
+      </div>
+
+    </div>
+
+    <!-- analytics row -->
+    <div class="analytics-row results-reveal" style="animation-delay:.12s" id="analyticsRow">
+      <!-- filled by JS -->
+    </div>
+
+    <!-- keywords -->
+    <div class="keywords-panel results-reveal" style="animation-delay:.22s">
+      <div class="sec-label">Keywords</div>
+      <div class="kw-cloud" id="kwCloud"></div>
+    </div>
+
+    <!-- transcript + summary -->
+    <div class="transcript-grid results-reveal" style="animation-delay:.32s">
+      <div class="text-panel">
+        <div class="sec-label">Summary</div>
+        <div class="text-body" id="summaryBody"></div>
+      </div>
+      <div class="text-panel">
+        <div class="sec-label">Transcript</div>
+        <div class="text-body" id="transcriptBody"></div>
+      </div>
+    </div>
+
+    <!-- raw JSON -->
+    <div class="json-bar results-reveal" style="animation-delay:.4s">
+      <button class="json-toggle-btn" id="jsonToggleBtn" onclick="toggleJson()">
+        <span class="arrow">▶</span>
+        <span>RAW JSON RESPONSE</span>
+      </button>
+      <pre class="json-pre" id="jsonPre"></pre>
+    </div>
+
+  </div><!-- /results -->
+
+</div><!-- /page-wrap -->
+
+<script>
+  // ── Build waveform bars ────────────────────────────────────────
+  const wfEl = document.getElementById('waveform');
+  const heights = [18,28,40,52,44,36,52,44,28,36,52,40,28,36,52,44,36,24,44,36];
+  heights.forEach((h, i) => {
+    const b = document.createElement('div');
+    b.className = 'wv-bar';
+    b.style.cssText = `height:${h}px; animation-delay:${(i * 0.065).toFixed(3)}s`;
+    wfEl.appendChild(b);
+  });
+
+  // btn wave bars
+  document.querySelectorAll('.btn-wv').forEach((b, i) => {
+    b.style.height = [12,18,22,18,12][i] + 'px';
+    b.style.animationDelay = (i * 0.1) + 's';
+  });
+
+  // ── Drag & drop ───────────────────────────────────────────────
+  const dz        = document.getElementById('dropzone');
+  const fileInput  = document.getElementById('audioFile');
+  const dropMain   = document.getElementById('dropMain');
+  const dropSub    = document.getElementById('dropSub');
+  const dropFName  = document.getElementById('dropFileName');
+
+  dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('dragover'); });
+  dz.addEventListener('dragleave', ()  => dz.classList.remove('dragover'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('dragover');
+    const f = e.dataTransfer.files[0];
+    if (f) setFile(f);
+  });
+  fileInput.addEventListener('change', () => { if (fileInput.files[0]) setFile(fileInput.files[0]); });
+
+  function setFile(f) {
+    dropMain.style.display = 'none';
+    dropSub.style.display  = 'none';
+    dropFName.style.display = 'block';
+    dropFName.textContent   = f.name;
+    const ext = f.name.split('.').pop().toLowerCase();
+    const fmt = document.getElementById('audioFormat');
+    if ([...fmt.options].some(o => o.value === ext)) fmt.value = ext;
+  }
+
+  // ── Alert ─────────────────────────────────────────────────────
+  function showAlert(msg, type = 'error') {
+    const el = document.getElementById('alertBox');
+    el.textContent = msg; el.className = `alert ${type}`; el.style.display = 'block';
+  }
+  function hideAlert() { document.getElementById('alertBox').style.display = 'none'; }
+
+  // ── Loading state ─────────────────────────────────────────────
+  const msgs = [
+    'TRANSCRIBING AUDIO SIGNAL...',
+    'RUNNING NLP ANALYSIS...',
+    'EXTRACTING SOP METRICS...',
+    'COMPUTING COMPLIANCE SCORE...',
+  ];
+  let msgIdx = 0, msgTimer = null;
+
+  function setLoading(on) {
+    const btn  = document.getElementById('submitBtn');
+    const txt  = document.getElementById('btnText');
+    const wave = document.getElementById('btnWave');
+    const proc = document.getElementById('processingBanner');
+    const pmsg = document.getElementById('processingMsg');
+
+    btn.disabled = on;
+    txt.style.display  = on ? 'none' : 'block';
+    wave.style.display = on ? 'flex'  : 'none';
+    proc.style.display = on ? 'flex'  : 'none';
+
+    if (on) {
+      msgIdx = 0; pmsg.textContent = msgs[0];
+      msgTimer = setInterval(() => {
+        msgIdx = (msgIdx + 1) % msgs.length;
+        pmsg.textContent = msgs[msgIdx];
+      }, 4000);
+    } else {
+      clearInterval(msgTimer);
+    }
+  }
+
+  // ── Submit ────────────────────────────────────────────────────
+  async function submitForm() {
+    hideAlert();
+    document.getElementById('results').style.display = 'none';
+
+    const file    = fileInput.files[0];
+    const language = document.getElementById('language').value;
+    const format   = document.getElementById('audioFormat').value;
+    const apiKey   = document.getElementById('apiKey').value.trim();
+    const baseUrl  = document.getElementById('apiUrl').value.trim().replace(/\/$/, '');
+
+    if (!file)   return showAlert('No audio file selected.');
+    if (!apiKey) return showAlert('API key is required.');
+
+    let audioBase64;
+    try { audioBase64 = await fileToBase64(file); }
+    catch (e) { return showAlert('Failed to read file: ' + e.message); }
+
+    setLoading(true);
+    try {
+      const res = await fetch(`${baseUrl}/api/call-analytics`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+        body: JSON.stringify({ language, audioFormat: format, audioBase64 }),
+      });
+      const data = await res.json();
+      if (!res.ok) return showAlert(`Error ${res.status}: ${data.detail || JSON.stringify(data)}`);
+      renderResults(data);
+    } catch (e) {
+      showAlert('Cannot reach API at: ' + baseUrl);
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function fileToBase64(file) {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload  = () => res(r.result.split(',')[1]);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+  }
+
+  // ── Render results ────────────────────────────────────────────
+  function renderResults(data) {
+    const sop = data.sop_validation;
+    const an  = data.analytics;
+    const pct = Math.round(sop.complianceScore * 100);
+    const passed = sop.adherenceStatus === 'FOLLOWED';
+
+    // Gauge
+    const CIRC = 408.41; // 2π×65
+    const arc  = document.getElementById('gaugeArc');
+    arc.style.stroke = passed ? 'var(--teal)' : 'var(--red)';
+    arc.style.filter = `drop-shadow(0 0 8px ${passed ? 'var(--teal)' : 'var(--red)'})`;
+    setTimeout(() => {
+      arc.style.strokeDashoffset = CIRC * (1 - sop.complianceScore);
+    }, 100);
+    document.getElementById('gaugePct').textContent = pct + '%';
+
+    // Adherence pill
+    const pill = document.getElementById('adherencePill');
+    pill.textContent = passed ? 'FOLLOWED' : 'NOT FOLLOWED';
+    pill.className = 'adherence-pill ' + (passed ? 'followed' : 'not-followed');
+
+    document.getElementById('gaugeLang').textContent = data.language.toUpperCase();
+
+    // SOP pipeline
+    const steps = [
+      { key:'greeting',         label:'Greeting' },
+      { key:'identification',   label:'Identify' },
+      { key:'problemStatement', label:'Problem' },
+      { key:'solutionOffering', label:'Solution' },
+      { key:'closing',          label:'Closing' },
+    ];
+    const pipe = document.getElementById('sopPipeline');
+    pipe.innerHTML = steps.map((s, i) => {
+      const ok = sop[s.key];
+      const connector = i < steps.length - 1
+        ? `<div class="sop-connector ${ok ? 'pass' : ''}"></div>` : '';
+      return `<div class="sop-step">
+        <div class="sop-step-top">
+          <div class="sop-node ${ok ? 'pass' : 'fail'}">${i+1}</div>
+          ${connector}
+        </div>
+        <div class="sop-step-label ${ok ? 'pass' : ''}">${s.label}</div>
+      </div>`;
+    }).join('');
+
+    document.getElementById('sopExplanation').textContent = sop.explanation || '';
+
+    // Analytics
+    const sentClass = { Positive:'positive', Neutral:'neutral', Negative:'negative' };
+    const payLabel  = { EMI:'EMI', FULL_PAYMENT:'FULL PAY', PARTIAL_PAYMENT:'PARTIAL', DOWN_PAYMENT:'DOWN PAY' };
+    const rejLabel  = {
+      HIGH_INTEREST:'High Interest', BUDGET_CONSTRAINTS:'Budget',
+      ALREADY_PAID:'Paid Already', NOT_INTERESTED:'Not Interested', NONE:'None',
+    };
+    const rejClass  = { NONE:'neutral', HIGH_INTEREST:'negative', BUDGET_CONSTRAINTS:'negative',
+                        ALREADY_PAID:'positive', NOT_INTERESTED:'negative' };
+
+    document.getElementById('analyticsRow').innerHTML = `
+      <div class="stat-card">
+        <div class="stat-label">Sentiment</div>
+        <div class="stat-value ${sentClass[an.sentiment] || ''}">${an.sentiment.toUpperCase()}</div>
+        <div class="stat-detail">Customer call tone</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Payment Preference</div>
+        <div class="stat-value">${payLabel[an.paymentPreference] || an.paymentPreference}</div>
+        <div class="stat-detail">${an.paymentPreference.replace(/_/g,' ')}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Rejection Reason</div>
+        <div class="stat-value ${rejClass[an.rejectionReason] || ''}">${rejLabel[an.rejectionReason] || an.rejectionReason}</div>
+        <div class="stat-detail">${an.rejectionReason.replace(/_/g,' ')}</div>
+      </div>
+    `;
+
+    // Keywords
+    document.getElementById('kwCloud').innerHTML =
+      (data.keywords || []).map(k => `<div class="kw-tag">${k}</div>`).join('');
+
+    // Text
+    document.getElementById('summaryBody').textContent    = data.summary    || '—';
+    document.getElementById('transcriptBody').textContent = data.transcript || '—';
+
+    // Raw JSON
+    document.getElementById('jsonPre').textContent = JSON.stringify(data, null, 2);
+
+    // Show
+    const el = document.getElementById('results');
+    el.style.display = 'block';
+    el.scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+
+  function toggleJson() {
+    const pre = document.getElementById('jsonPre');
+    const btn = document.getElementById('jsonToggleBtn');
+    const open = pre.style.display === 'block';
+    pre.style.display = open ? 'none' : 'block';
+    btn.classList.toggle('open', !open);
+  }
+</script>
+</body>
+</html>
