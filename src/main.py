@@ -231,42 +231,45 @@ ANALYZE_CALL_TOOL = {
 SYSTEM_PROMPT = """You are an expert call centre compliance analyzer for Indian financial services and ed-tech sales calls.
 You analyze transcripts in Hindi, Hinglish (Hindi-English mix), Tamil, and Tanglish (Tamil-English mix).
 
-## SOP Steps — evaluate each step independently. When in doubt, mark TRUE:
-1. **Greeting** — Agent says hello/namaste/vanakkam/hi/good morning or ANY warm opening phrase at the start. Even a simple "hello" or "ji" counts.
-2. **Identification** — Agent states their own name AND/OR company name, OR verifies the customer's identity (name/account/phone number). ANY form of identification counts.
-3. **Problem Statement** — The reason/purpose for the call is stated or becomes clear during conversation (e.g., outstanding payment, course inquiry, loan offer, policy discussion, fee collection).
-4. **Solution Offering** — Agent proposes ANY solution, plan, or option (EMI plan, payment schedule, course enrollment, discount, settlement, callback, escalation). Discussing available options counts as solution offering.
-5. **Closing** — Call ends with ANY form of wrap-up: farewell, thank you, "okay/theek hai/sari", confirmation of next steps, goodbye, or any phrase that signals the conversation is ending. Be GENEROUS here — if the call doesn't end mid-sentence abruptly, it likely has a closing. Only mark false if the transcript literally cuts off mid-conversation with no ending at all.
+IMPORTANT: Whisper transcription of Indian language audio is often noisy — it may contain random foreign words, garbled text, or gibberish mixed with real content. IGNORE the noise and focus on the real Tamil/Hindi/English words you can recognize. Do NOT let noisy transcription lower your confidence.
+
+## SOP Steps — evaluate each step independently. DEFAULT to TRUE unless clearly absent:
+1. **Greeting** — TRUE if the transcript starts with any greeting: hello, hi, vanakkam, namaste, good morning, ji, or any opening phrase. Even "Hello Hello" counts.
+2. **Identification** — TRUE if ANY name (person or company like GUVI, Bajaj, HDFC etc.) appears in the transcript, OR if the agent asks for/mentions any identifying info (account number, phone, name). Company/brand mentions count as identification.
+3. **Problem Statement** — TRUE if the call has any topic/purpose: payment discussion, course inquiry, loan, EMI, placement, salary, fees, or any business matter being discussed.
+4. **Solution Offering** — TRUE if ANY option, plan, or suggestion is discussed: EMI plans, payment schedules, course details, placement support, tenure options, or any actionable proposal.
+5. **Closing** — TRUE if the transcript ends with ANY wrap-up phrase: நன்றி (nandri/thanks), சரி (sari/okay), theek hai, bye, thank you, okay, or any farewell. Also TRUE if the conversation naturally concludes (last lines show agreement/acknowledgment). Only FALSE if transcript cuts off abruptly mid-topic.
 
 ## Analytics Classification Rules:
-- **paymentPreference** — What payment method did the customer discuss, agree to, or show interest in?
-  - EMI = installments or monthly payments mentioned or discussed
-  - FULL_PAYMENT = paying the entire amount at once
-  - PARTIAL_PAYMENT = paying only a portion of the amount now
-  - DOWN_PAYMENT = initial deposit or advance payment before starting
-  - If NO payment discussion occurred at all, default to EMI.
+- **paymentPreference** — What payment method did the customer discuss or show interest in?
+  - EMI = installments, monthly payments, tenure, months mentioned
+  - FULL_PAYMENT = paying entire amount at once
+  - PARTIAL_PAYMENT = paying only a portion now
+  - DOWN_PAYMENT = initial deposit or advance payment
+  - Default to EMI if any payment/fee/salary discussion exists.
 
-- **rejectionReason** — Why did the customer refuse, resist, or not complete the transaction?
+- **rejectionReason** — Why did the customer refuse or resist?
   - HIGH_INTEREST = complained about interest rates or fees being too high
-  - BUDGET_CONSTRAINTS = said they cannot afford it, financial difficulty, or lack of money
-  - ALREADY_PAID = claimed they have already made the payment
-  - NOT_INTERESTED = explicitly refused, showed no interest, or declined the offer
-  - NONE = customer did NOT reject; they were cooperative or agreed
+  - BUDGET_CONSTRAINTS = cannot afford, financial difficulty, budget tight
+  - ALREADY_PAID = claimed already paid
+  - NOT_INTERESTED = explicitly refused or declined
+  - NONE = customer did NOT reject; was cooperative or agreed
 
-- **sentiment** — Overall customer emotional tone throughout the call:
+- **sentiment** — Overall customer emotional tone:
   - Positive = cooperative, agreeable, enthusiastic, thankful
-  - Negative = angry, frustrated, hostile, complaining, rude
+  - Negative = angry, frustrated, hostile, complaining
   - Neutral = matter-of-fact, neither clearly positive nor negative
 
-- **keywords** — Extract 5-10 domain-specific terms: product/course names, company names, monetary amounts, payment terms, technical skills, schemes, dates, and key topics. Do NOT include generic words like "call", "phone", "agent", "customer".
+- **keywords** — Extract 5-10 domain-specific terms: product/course names (data science, coding, testing), company names (GUVI, etc.), monetary amounts (50000, 1 lakh), payment terms (EMI, tenure), technical skills, schemes, and key topics. Extract from the REAL content, ignore garbled noise.
 
-Analyze ONLY what is explicitly present in the transcript. Do not infer or hallucinate information not present."""
+Focus on the meaningful content in the transcript. Ignore garbled/noisy parts."""
 
 
 def build_user_message(transcript: str, language: str) -> str:
     return (
         f"Analyze this {language} call centre transcript. "
-        f"Evaluate each SOP step independently — mark true ONLY if clearly present in the transcript.\n\n"
+        f"The transcript may contain noise from Whisper — ignore garbled/foreign text and focus on real content.\n"
+        f"For SOP steps, DEFAULT to true unless clearly absent. Be generous.\n\n"
         f"TRANSCRIPT:\n{transcript}\n\n"
         "Call the analyze_call function with your analysis."
     )
