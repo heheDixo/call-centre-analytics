@@ -164,23 +164,23 @@ ANALYZE_CALL_TOOL = {
                     "properties": {
                         "greeting": {
                             "type": "boolean",
-                            "description": "true if the agent greeted the customer at the start of the call"
+                            "description": "true if the agent greeted the customer in any way (hello, hi, namaste, vanakkam, good morning, etc.)"
                         },
                         "identification": {
                             "type": "boolean",
-                            "description": "true if the agent introduced themselves or verified the customer's identity"
+                            "description": "true if the agent stated their name/company OR verified customer identity in any way"
                         },
                         "problemStatement": {
                             "type": "boolean",
-                            "description": "true if the purpose or issue of the call was clearly stated"
+                            "description": "true if the purpose/reason for the call was stated or became clear during the conversation"
                         },
                         "solutionOffering": {
                             "type": "boolean",
-                            "description": "true if the agent offered a solution, plan, or discussed options with the customer"
+                            "description": "true if the agent proposed any solution, plan, option, or discussed available choices"
                         },
                         "closing": {
                             "type": "boolean",
-                            "description": "true if the call ended with a proper closing, confirmation, or farewell"
+                            "description": "true if the call ended with any wrap-up (farewell, thank you, okay, theek hai, bye, confirmation). Only false if transcript cuts off mid-conversation."
                         },
                         "explanation": {
                             "type": "string",
@@ -231,12 +231,12 @@ ANALYZE_CALL_TOOL = {
 SYSTEM_PROMPT = """You are an expert call centre compliance analyzer for Indian financial services and ed-tech sales calls.
 You analyze transcripts in Hindi, Hinglish (Hindi-English mix), Tamil, and Tanglish (Tamil-English mix).
 
-## SOP Steps — evaluate each step STRICTLY and independently:
-1. **Greeting** — Agent says hello/namaste/vanakkam or any warm opening phrase. Must be an EXPLICIT greeting at the start.
-2. **Identification** — Agent states their own name AND/OR company name, OR verifies the customer's identity (name/account number). Giving or asking for identity both count.
-3. **Problem Statement** — The reason/purpose for the call is clearly stated (e.g., outstanding payment, course inquiry, loan offer, policy discussion).
-4. **Solution Offering** — Agent proposes a specific actionable solution (EMI plan, payment schedule, course enrollment, discount, settlement). Merely discussing the problem is NOT a solution.
-5. **Closing** — Call ends with a clear farewell, thank you, confirmation of next steps, or goodbye. An abrupt end without any closing = false.
+## SOP Steps — evaluate each step independently. When in doubt, mark TRUE:
+1. **Greeting** — Agent says hello/namaste/vanakkam/hi/good morning or ANY warm opening phrase at the start. Even a simple "hello" or "ji" counts.
+2. **Identification** — Agent states their own name AND/OR company name, OR verifies the customer's identity (name/account/phone number). ANY form of identification counts.
+3. **Problem Statement** — The reason/purpose for the call is stated or becomes clear during conversation (e.g., outstanding payment, course inquiry, loan offer, policy discussion, fee collection).
+4. **Solution Offering** — Agent proposes ANY solution, plan, or option (EMI plan, payment schedule, course enrollment, discount, settlement, callback, escalation). Discussing available options counts as solution offering.
+5. **Closing** — Call ends with ANY form of wrap-up: farewell, thank you, "okay/theek hai/sari", confirmation of next steps, goodbye, or any phrase that signals the conversation is ending. Be GENEROUS here — if the call doesn't end mid-sentence abruptly, it likely has a closing. Only mark false if the transcript literally cuts off mid-conversation with no ending at all.
 
 ## Analytics Classification Rules:
 - **paymentPreference** — What payment method did the customer discuss, agree to, or show interest in?
@@ -320,7 +320,7 @@ def process_call_analytics(self, language: str, audio_format: str, audio_base64:
         chat_response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             max_tokens=2048,
-            temperature=0.1,   # low temp for consistent structured output
+            temperature=0,     # zero temp for deterministic output
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user",   "content": build_user_message(transcript, language)},

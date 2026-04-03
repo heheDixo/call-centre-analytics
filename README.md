@@ -21,7 +21,7 @@ An AI-powered API that processes call centre audio recordings in Hindi (Hinglish
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/call-centre-analytics.git
+git clone https://github.com/heheDixo/call-centre-analytics.git
 cd call-centre-analytics
 ```
 
@@ -61,6 +61,44 @@ The API docs are available at `http://localhost:8000/docs` and the web UI at `ht
 4. **SOP Scoring** — Compliance score and adherence status are computed deterministically in Python (not by the LLM), ensuring consistency. All 5 SOP steps must be present for "FOLLOWED" status.
 5. **Vector Indexing** — Each processed transcript is stored in ChromaDB with metadata (language, sentiment, adherence status, summary) for semantic search via the `/api/search` endpoint.
 6. **Async Processing** — Celery handles task execution. In eager mode, tasks run in-process (no Redis needed). In production, a separate Celery worker processes tasks via Redis.
+
+## Architecture Overview
+
+```
+┌──────────────┐     ┌──────────────────┐     ┌──────────────────┐     ┌─────────────┐
+│  Client /    │────▶│  FastAPI Server   │────▶│  Groq Whisper    │────▶│  Groq LLaMA │
+│  Web UI      │     │  (Auth + CORS)    │     │  (STT)           │     │  (Analysis) │
+└──────────────┘     └──────────────────┘     └──────────────────┘     └─────────────┘
+                              │                                               │
+                              ▼                                               ▼
+                     ┌──────────────────┐                            ┌─────────────────┐
+                     │  Celery Task     │                            │  SOP Scoring     │
+                     │  (Eager/Redis)   │                            │  (Deterministic) │
+                     └──────────────────┘                            └─────────────────┘
+                              │
+                              ▼
+                     ┌──────────────────┐
+                     │  ChromaDB        │
+                     │  (Vector Store)  │
+                     └──────────────────┘
+```
+
+**Flow:** Audio (base64) → Whisper transcription → LLaMA structured analysis (tool calling) → Deterministic SOP scoring → ChromaDB storage → JSON response
+
+## AI Tools Used
+
+| Tool | Purpose |
+|------|---------|
+| Claude  | debugging|
+| Groq Whisper (whisper-large-v3) | Speech-to-text transcription for Hindi/Tamil audio |
+| Groq LLaMA 3.3 70B | NLP analysis — SOP validation, sentiment, payment classification, keyword extraction |
+
+## Known Limitations
+
+- Groq free tier has rate limits (~30 requests/minute for Whisper, ~30 for LLaMA)
+- Whisper transcription accuracy may vary with heavy background noise or mixed-language switching
+- ChromaDB uses default embedding model — no custom fine-tuned embeddings for domain-specific search
+- Celery eager mode runs synchronously; production use should enable Redis worker for parallel processing
 
 ## API Usage
 
